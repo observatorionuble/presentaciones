@@ -1,0 +1,874 @@
+# *-*-*-**-*-*-**-*-*-**-*-*-**-*-*-**-*-*-**-*-*-**-*-*-**-*-*-**-*-*-**-*-*-**-*-*-**-*-*-**-*-**-*
+# ++ REPORTES SECTORIALES ++ ----------------------------------------------------
+# *-*-*-**-*-*-**-*-*-**-*-*-**-*-*-**-*-*-**-*-*-**-*-*-**-*-*-**-*-*-**-*-*-**-*-*-**-*-*-**-*-**-*
+#
+#
+# Héctor Garrido Henríquez
+# Analista Cuantitativo. Observatorio Laboral Ñuble
+# Docente. Facultad de Ciencias Empresariales
+# Universidad del Bío-Bío
+# Avenida Andrés Bello 720, Casilla 447, Chillán
+# Teléfono: +56-942353973
+# http://www.observatoriolaboralnuble.cl
+
+rm(list = ls())
+
+
+#
+Sys.setenv(LANG = "en")
+
+
+load_pkg <- function(pack){
+  create.pkg <- pack[!(pack %in% installed.packages()[, "Package"])]
+  if (length(create.pkg))
+    install.packages(create.pkg, dependencies = TRUE)
+  sapply(pack, require, character.only = TRUE)
+}
+
+devtools::install_github("martinctc/surveytoolbox")
+
+packages = c("tidyverse", "stringi", "lubridate", 
+             "data.table", "srvyr", "pbapply", 
+             "ggrepel", "RColorBrewer", "readstata13", 
+             "gtable", "gridExtra", "tidytext", 
+             "wordcloud", "kableExtra", "captioner", 
+             "foreign", "RPostgres", "haven", 
+             "rJava", "openxlsx", "timetk", 
+             "forecast","sweep", "tidyquant", 
+             "ggmap", "rgeos", "ggalt", "maptools", 
+             "rgdal", "readxl", "grid", "scales", 
+             "fuzzyjoin", "survey", "directlabels", "microbenchmark", 
+             "haven", "sjlabelled", "labelled", "surveytoolbox", "multcomp")
+
+load_pkg(packages)
+
+path = "C:/Users/omen03/Google Drive/OLR Ñuble - Observatorio laboral de Ñuble/Análisis Cuantitativo/20210720_analisis_casen"
+
+file_path = "C:/Users/omen03/Google Drive/OLR Ñuble - Observatorio laboral de Ñuble/Bases de datos/Encuesta de Caracterización Socioeconómica Nacional (CASEN)/Casen_en_Pandemia_2020_SPSS.sav/Casen en Pandemia 2020 SPSS.sav"
+
+file_path_2 = "C:/Users/omen03/Google Drive/OLR Ñuble - Observatorio laboral de Ñuble/Bases de datos/Encuesta de Caracterización Socioeconómica Nacional (CASEN)/casen2017.sav"
+
+
+casen2017 <- haven::read_sav(file_path_2)
+casen2020 <- haven::read_sav(file_path) 
+
+
+# %>% 
+#   mutate(year = 2020, 
+#          o7 = dplyr::recode(o7,
+#                             `1` = 1L, `2` = 2L, `3` = 3L, 
+#                             `4` = 4L, `5` = 5L, `6` = 6L,
+#                             `7` = 7L, `8` = 8L, `9` = 9L, 
+#                             `10` = 10L, `11` = 11L, `12` = 12L, 
+#                             `13` = 13L, `14` = 14L, `15` = 16L, 
+#                             `16` = 16L, `17` = 17L, `18` = 18L, `19` = 19L,
+#                             .combine_value_labels = TRUE,.sep = "o"))
+
+
+casen2020$pco1 %>% class()
+
+casen2020$pco1 %>% attr('labels')
+
+directorio_2017 = casen2017 %>% varl_tb()
+directorio_2020 = casen2020 %>% varl_tb()
+
+casen2020 %>% look_for("autónomo")
+casen2020 %>% look_for("razón")
+casen2017 %>% look_for("razón")
+
+casen2017 %>% look_for("activ")
+
+# find_offending_character <- function(x, maxStringLength=256){  
+#   print(x)
+#   for (c in 1:maxStringLength){
+#     offendingChar <- substr(x,c,c)
+#     #print(offendingChar) #uncomment if you want the indiv characters printed
+#     #the next character is the offending multibyte Character
+#   }    
+# }
+# 
+# 
+# string_vector <- c("test", "Se\x96ora", "works fine")
+# 
+# lapply(casen2020[363,1:20], find_offending_character)
+# casen2020 %>% sjPlot::view_df(show.na = TRUE)
+
+casen_2017 = casen2017 %>% as_survey_design(ids = varunit, strata = varstrat, weights = expr)
+casen_2020 = casen2020 %>% as_survey_design(ids = varunit, strata = varstrat, weights = expr)
+
+
+names(casen2017) %in% names(casen_2020)
+
+
+##############################################################################################
+# Ingreso mediano según sexo y región 
+##############################################################################################
+
+cat_reg = casen2020 %>%  extract_vallab("region")
+cat_sex = casen2020 %>% extract_vallab("sexo")
+
+ing_med_2017 = casen_2017 %>% 
+  group_by(region, sexo) %>% 
+  summarise(ingreso_mediano = survey_median(ytrabajocor, na.rm= TRUE, vartype = "se"))
+
+ing_med_2017 = ing_med_2017 %>%
+  rename(id = region) %>%
+  left_join(cat_reg) %>% 
+  rename(cod_reg = id) %>% 
+  rename(id = sexo) %>% 
+  left_join(cat_sex)
+
+ing_med_2020 = casen_2020 %>% 
+  group_by(region, sexo) %>% 
+  summarise(ingreso_mediano = survey_median(ytrabajocor, na.rm= TRUE, vartype = "se"))
+
+ing_med_2020 = ing_med_2020 %>%
+  rename(id = region) %>%
+  left_join(cat_reg) %>% 
+  rename(cod_reg = id) %>% 
+  rename(id = sexo) %>% 
+  left_join(cat_sex)
+
+# modelo = svyglm(ytrabajocor~region+sexo+sexo*region, design = casen_2017 %>% 
+#                   mutate(sexo = factor(sexo), region = factor(region)))
+# 
+# anova = anova(modelo)
+#   
+# post_hoc = summary(glht(modelo, linfct = mcp(region="Tukey")))
+
+
+##############################################################################################
+# Ingreso mediano según región 
+##############################################################################################
+
+cat_reg = casen2020 %>%  extract_vallab("region")
+
+ing_med_ = casen2017 %>% select(varstrat, varunit, expr, region, ytrabajocor) %>% mutate(year = 2017) %>% 
+  rbind(casen2020 %>% select(varstrat, varunit, expr, region, ytrabajocor) %>% mutate(year = 2020)) %>% 
+  as_survey_design(ids = varunit, strata = varstrat, weights = expr) %>% 
+  group_by(year, region) %>% 
+  summarise(ingreso_mediano = survey_median(ytrabajocor, na.rm= TRUE, vartype = "se")) %>% 
+  rename(id = region) %>% 
+  left_join(cat_reg) %>% 
+  reshape2::dcast(region~year, value.var = "ingreso_mediano")
+
+
+##############################################################################################
+# Ingreso del trabajo según decil de ingreso autónomo ======================================= 
+##############################################################################################
+
+cat_reg = casen2020 %>%  extract_vallab("region")
+
+ing_med_dec = casen2017 %>% select(varstrat, varunit, expr, region, dautr, ytrabajocorh, pco1) %>% mutate(year = 2017) %>% 
+  rbind(casen2020 %>% select(varstrat, varunit, expr, region, dautr, ytrabajocorh, pco1) %>% mutate(year = 2020)) %>% 
+  as_survey_design(ids = varunit, strata = varstrat, weights = expr) %>% 
+  group_by(year, region, dautr, .drop = TRUE) %>% 
+  filter(pco1 == 1, region == 16) %>% 
+  summarise(ingreso_mediano = survey_total(ytrabajocorh, na.rm= TRUE, vartype = "cv")) 
+
+ing_med_dec %>% 
+  group_by(year) %>% 
+  mutate(ind_10_10 = )
+
+
+
+
+
+##############################################################################################
+# Ingreso mediano según sexo y región 
+##############################################################################################
+
+cat_reg = casen2020 %>%  extract_vallab("region")
+cat_sex = casen2020 %>% extract_vallab("sexo")
+
+ing_med_2017 = casen_2017 %>% 
+  group_by(region, sexo) %>% 
+  summarise(ingreso_mediano = survey_median(ytrabajocor, na.rm= TRUE, vartype = "se"))
+
+ing_med_2017 = ing_med_2017 %>%
+  rename(id = region) %>%
+  left_join(cat_reg) %>% 
+  rename(cod_reg = id) %>% 
+  rename(id = sexo) %>% 
+  left_join(cat_sex)
+
+ing_med_2020 = casen_2020 %>% 
+  group_by(region, sexo) %>% 
+  summarise(ingreso_mediano = survey_median(ytrabajocor, na.rm= TRUE, vartype = "se"))
+
+ing_med_2020 = ing_med_2020 %>%
+  rename(id = region) %>%
+  left_join(cat_reg) %>% 
+  rename(cod_reg = id) %>% 
+  rename(id = sexo) %>% 
+  left_join(cat_sex)
+
+
+##############################################################################################
+# Ingreso mediano según región 
+##############################################################################################
+
+cat_reg = casen2020 %>%  extract_vallab("region")
+
+ing_med_ = casen2017 %>% select(varstrat, varunit, expr, region, ytrabajocor) %>% mutate(year = 2017) %>% 
+  rbind(casen2020 %>% select(varstrat, varunit, expr, region, ytrabajocor) %>% mutate(year = 2020)) %>% 
+  as_survey_design(ids = varunit, strata = varstrat, weights = expr) %>% 
+  group_by(year, region) %>% 
+  summarise(ingreso_mediano = survey_median(ytrabajocor, na.rm= TRUE, vartype = "se")) %>% 
+  rename(id = region) %>% 
+  left_join(cat_reg) %>% 
+  reshape2::dcast(region~year, value.var = "ingreso_mediano")
+
+
+##############################################################################################
+# Ingreso del trabajo según decil de ingreso autónomo ======================================= 
+##############################################################################################
+
+cat_daut_2017 = casen2017 %>%  extract_vallab("dautr")
+
+ing_trab_2017 = casen_2017 %>% 
+  filter(region %in% c(16)) %>% 
+  group_by(dautr, .drop = TRUE) %>% 
+  mutate(dautr = as.character(dautr)) %>% 
+  summarise(ing_trabajo = survey_mean(ypchtrabajo, na.rm= TRUE, vartype = "cv"), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  rename(id = dautr) %>% 
+  mutate(id = as.double(id)) %>% 
+  left_join(cat_reg_2017) %>% 
+  mutate(calidad = ifelse(n_>=60 & ing_trabajo_cv<=.2 & gl>=9,1,0)) %>% 
+  filter(!is.na(id)) %>% 
+  ungroup %>% 
+  add_row(id = NA, ing_trabajo = NA, ing_trabajo_cv = NA, n_ = sum(.$n_), gl = NA, dautr = NA, calidad = mean(.$calidad))
+
+
+
+cat_daut_2020 = casen2020 %>%  extract_vallab("dautr")
+
+ing_trab_2020 = casen_2020 %>% 
+  filter(region %in% c(16)) %>% 
+  group_by(dautr, .drop = TRUE) %>% 
+  mutate(dautr = as.character(dautr)) %>% 
+  summarise(ing_trabajo = survey_mean(ypchtrabcor, na.rm= TRUE, vartype = "cv"), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  rename(id = dautr) %>% 
+  mutate(id = as.double(id)) %>% 
+  left_join(cat_daut_2020) %>% 
+  mutate(calidad = ifelse(n_>=60 & ing_trabajo_cv<=.2 & gl>=9,1,0)) %>% 
+  filter(!is.na(id)) %>% 
+  ungroup %>% 
+  add_row(id = NA, ing_trabajo = NA, ing_trabajo_cv = NA, n_ = sum(.$n_), gl = NA, dautr = NA, calidad = mean(.$calidad))
+
+##############################################################################################
+# Razones de inactividad ======================================= 
+##############################################################################################
+
+# Encuesta CASEN 2017 
+#
+# o7r1     o7r1. ¿Cuál es la razón o razones...? razón 1          dbl+lbl  
+#       [1] Consiguió trabajo que empezará pronto o iniciará ~
+#       [2] Está esperando resultado de gestiones ya emprendi~
+#       [3] No tiene con quien dejar a los niños              
+#       [4] No tiene con quien dejar a adultos mayores        
+#       [5] No tiene con quien dejar a otro familiar          
+#       [6] Está enfermo o tiene una discapacidad             
+#       [7] Piensa que nadie le dará trabajo (porque no cuent~
+#       [8] Las reglas, horarios y distancias de los trabajos~
+#       [9] Ofrecen sueldos muy bajos                         
+#       [10] Quehaceres del hogar                             
+#       [11] Estudiante                                       
+#       [12] Jubilado(a), pensionado(a) o montepiado(a)       
+#       [13] Tiene otra fuente de ingreso (seguro de cesantía~
+#       [14] Se cansó de buscar o cree que no hay trabajo dis~
+#       [15] Busca cuando realmente lo necesita o tiene traba~
+#       [16] No tiene interés en trabajar                     
+#       [17] Otra razón
+
+# Encuesta CASEN 2017 
+      # 
+# # o7       o7. ¿Cuál es la razón principal para no buscar trabajo~ dbl+lbl  
+# #       [1] Consiguió trabajo que empezará pronto o iniciará p~
+#         [2] Está esperando resultado de gestiones ya emprendid~
+#         [3] No tiene con quien dejar los niños
+#         [4] No tiene con quien dejar a adultos mayores
+#         [5] No tiene con quien a otro familiar
+#         [6] Está enfermo o tiene una discapacidad
+#         [7] Piensa que nadie le dará trabajo porque no cuenta ~
+#         [8] Las reglas, horarios y distancias de los trabajos ~
+#         [9] Ofrecen sueldos muy bajos
+#         [10] Quehaceres del hogar
+#         [11] Estudiante
+#         [12] Jubilado(a), montepiado(a) o pensionado(a)
+#         [13] Tiene otra fuente de ingreso (Seguro de Cesantía,~
+#         [14] Por temor a contagiarse de COVID-19
+#         [15] Se cansó de buscar
+#         [16] Cree que no hay trabajo disponible
+#         [17] Busca cuando realmente lo necesita o tiene trabaj~
+#         [18] No tiene interés en trabajar
+#         [19] Otra razón. Especifique
+
+
+
+cat_reg_2017 = casen2017 %>%  extract_vallab("o7r1")
+
+raz_inac_2017 = casen_2017 %>% 
+  filter(region %in% c(5,6,7,8,16)) %>% 
+  group_by(o7r1, .drop = TRUE) %>% 
+  mutate(o7r1 = as.character(o7r1)) %>% 
+  summarise(razones = survey_mean(na.rm= TRUE, vartype = "se"), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  rename(id = o7r1) %>% 
+  mutate(id = as.double(id)) %>% 
+  left_join(cat_reg_2017) %>% 
+  mutate(se_max = ifelse(razones<0.5, (razones^(2/3))/9, ((1-razones)^(2/3))/9),
+         calidad = ifelse(n_>=60 & razones_se<=se_max & gl>=9,1,0)) %>% 
+  filter(!is.na(id)) %>% 
+  ungroup %>% 
+  add_row(id = NA, razones = NA, razones_se = NA, n_ = sum(.$n_), o7r1 = NA, gl = NA, se_max = NA, calidad = mean(.$calidad))
+
+
+cat_reg_2020 = casen2020 %>%  extract_vallab("o7")
+
+raz_inac_2020 = casen_2020 %>% 
+  filter(region %in% c(5,6,7,16,8)) %>% 
+  group_by(o7, .drop = TRUE) %>% 
+  mutate(o7 = as.character(o7)) %>% 
+  summarise(razones = survey_mean(na.rm= TRUE, vartype = "cv"), 
+            n_ = unweighted(n())) %>% 
+  rename(id = o7) %>% 
+  mutate(id = as.double(id)) %>% 
+  left_join(cat_reg_2020) %>% 
+  mutate(calidad = ifelse(n_>=60 & razones_cv<=0.20,1,0)) %>% 
+  filter(!is.na(id)) %>% 
+  ungroup %>% 
+  add_row(id = NA, razones = NA, razones_cv = NA, n_ = sum(.$n_), o7 = NA, calidad = mean(.$calidad))
+
+
+
+##############################################################################################
+# oficio grandes grupos ======================================= 
+##############################################################################################
+
+
+cat_ofi_2017 = casen2017 %>%  extract_vallab("oficio1")
+
+oficios_2017 = casen_2017 %>% 
+  filter(region %in% c(16), !is.na(oficio1), oficio1!= 999) %>% 
+  group_by(oficio1, .drop = TRUE) %>% 
+  mutate(oficio1 = as.character(oficio1)) %>% 
+  summarise(oficios = survey_mean(na.rm= TRUE, vartype = "se"), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  rename(id = oficio1) %>% 
+  mutate(id = as.double(id)) %>% 
+  left_join(cat_ofi_2017) %>% 
+  mutate(se_max = ifelse(oficios<0.5, (oficios^(2/3))/9, ((1-oficios)^(2/3))/9),
+         calidad = ifelse(n_>=60 & oficios_se<=se_max & gl>=9,1,0)) %>% 
+  filter(!is.na(id)) %>% 
+  ungroup %>% 
+  add_row(id = NA, oficios = NA, oficios_se = NA, n_ = sum(.$n_), gl = NA, oficio1 = NA, se_max = NA, calidad = mean(.$calidad))
+
+
+cat_ofi_2020 = casen2020 %>%  extract_vallab("oficio1_08")
+
+oficios_2020 = casen_2020 %>% 
+  filter(region %in% c(16), !is.na(oficio1_08), !(oficio1_08 %in% c(98,99))) %>% 
+  group_by(oficio1_08, .drop = TRUE) %>% 
+  mutate(oficio1_08 = as.character(oficio1_08)) %>% 
+  summarise(oficios = survey_mean(na.rm= TRUE, vartype = "se"), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  rename(id = oficio1_08) %>% 
+  mutate(id = as.double(id)) %>% 
+  left_join(cat_ofi_2020) %>% 
+  mutate(se_max = ifelse(oficios<0.5, (oficios^(2/3))/9, ((1-oficios)^(2/3))/9),
+         calidad = ifelse(n_>=60 & oficios_se<=se_max & gl>=9,1,0)) %>% 
+  filter(!is.na(id)) %>% 
+  ungroup %>% 
+  add_row(id = NA, oficios = NA, oficios_se = NA, n_ = sum(.$n_), gl = NA, oficio1_08 = NA, se_max = NA, calidad = mean(.$calidad))
+
+
+
+##############################################################################################
+# Sector económico ======================================= 
+##############################################################################################
+
+
+cat_ocupa_2017 = casen2017 %>%  extract_vallab("o15")
+
+cat_ocup_2017 = casen_2017 %>% 
+  filter(region %in% c(16), !is.na(o15)) %>% 
+  group_by(o15, .drop = TRUE) %>% 
+  mutate(o15 = as.character(o15)) %>% 
+  summarise(categoria = survey_mean(na.rm= TRUE, vartype = "se"), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  rename(id = o15) %>% 
+  mutate(id = as.double(id)) %>% 
+  left_join(cat_ocupa_2017) %>% 
+  mutate(se_max = ifelse(categoria<0.5, (categoria^(2/3))/9, ((1-categoria)^(2/3))/9),
+         calidad = ifelse(n_>=60 & categoria_se<=se_max & gl>=9,1,0)) %>% 
+  filter(!is.na(id)) %>% 
+  ungroup %>% 
+  add_row(id = NA, categoria = NA, categoria_se = NA, n_ = sum(.$n_), gl = NA, o15 = NA, se_max = NA, calidad = mean(.$calidad))
+
+
+cat_ocupa_2020 = casen2020 %>%  extract_vallab("o15")
+
+cat_ocup_2020 = casen_2020 %>% 
+  filter(region %in% c(16), !is.na(o15)) %>% 
+  group_by(o15, .drop = TRUE) %>% 
+  mutate(o15 = as.character(o15)) %>% 
+  summarise(categoria = survey_mean(na.rm= TRUE, vartype = "se"), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  rename(id = o15) %>% 
+  mutate(id = as.double(id)) %>% 
+  left_join(cat_ocupa_2020) %>% 
+  mutate(se_max = ifelse(categoria<0.5, (categoria^(2/3))/9, ((1-categoria)^(2/3))/9),
+         calidad = ifelse(n_>=60 & categoria_se<=se_max & gl>=9,1,0)) %>% 
+  filter(!is.na(id)) %>% 
+  ungroup %>% 
+  add_row(id = NA, categoria = NA, categoria_se = NA, n_ = sum(.$n_), gl = NA, o15 = NA, se_max = NA, calidad = mean(.$calidad))
+
+
+
+##############################################################################################
+# Condición de actividad ======================================= 
+##############################################################################################
+
+
+cat_cae_2017 = casen2017 %>%  extract_vallab("activ")
+
+cat_caes_2017 = casen_2017 %>% 
+  filter(region %in% c(16), !is.na(activ)) %>% 
+  group_by(activ, .drop = TRUE) %>% 
+  mutate(activ = as.character(activ)) %>% 
+  summarise(cae = survey_mean(na.rm= TRUE, vartype = "se"), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  rename(id = activ) %>% 
+  mutate(id = as.double(id)) %>% 
+  left_join(cat_cae_2017) %>% 
+  mutate(se_max = ifelse(cae<0.5, (cae^(2/3))/9, ((1-cae)^(2/3))/9),
+         calidad = ifelse(n_>=60 & cae_se<=se_max & gl>=9,1,0)) %>% 
+  filter(!is.na(id)) %>% 
+  ungroup %>% 
+  add_row(id = NA, cae = NA, cae_se = NA, n_ = sum(.$n_), gl = NA, activ = NA, se_max = NA, calidad = mean(.$calidad))
+
+
+cat_cae_2020 = casen2020 %>%  extract_vallab("activ")
+
+cat_caes_2020 = casen_2020 %>% 
+  filter(region %in% c(16), !is.na(activ)) %>% 
+  group_by(activ, .drop = TRUE) %>% 
+  mutate(activ = as.character(activ)) %>% 
+  summarise(cae = survey_mean(na.rm= TRUE, vartype = "se"), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  rename(id = activ) %>% 
+  mutate(id = as.double(id)) %>% 
+  left_join(cat_cae_2020) %>% 
+  mutate(se_max = ifelse(cae<0.5, (cae^(2/3))/9, ((1-cae)^(2/3))/9),
+         calidad = ifelse(n_>=60 & cae_se<=se_max & gl>=9,1,0)) %>% 
+  filter(!is.na(id)) %>% 
+  ungroup %>% 
+  add_row(id = NA, cae = NA, cae_se = NA, n_ = sum(.$n_), gl = NA, activ = NA, se_max = NA, calidad = mean(.$calidad))
+
+
+##############################################################################################
+# Sector económico ======================================= 
+##############################################################################################
+
+
+cat_rama_2017 = casen2017 %>%  extract_vallab("rama1")
+
+cat_ramas_2017 = casen_2017 %>% 
+  filter(region %in% c(16), !is.na(rama1), rama1!= 999) %>% 
+  group_by(rama1, .drop = TRUE) %>% 
+  mutate(rama1 = as.character(rama1)) %>% 
+  summarise(rama = survey_mean(na.rm= TRUE, vartype = "se"), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  rename(id = rama1) %>% 
+  mutate(id = as.double(id)) %>% 
+  left_join(cat_rama_2017) %>% 
+  mutate(se_max = ifelse(rama<0.5, (rama^(2/3))/9, ((1-rama)^(2/3))/9),
+         calidad = ifelse(n_>=60 & rama_se<=se_max & gl>=9,1,0)) %>% 
+  filter(!is.na(id)) %>% 
+  ungroup %>% 
+  add_row(id = NA, rama = NA, rama_se = NA, n_ = sum(.$n_), gl = NA, rama1 = NA, se_max = NA, calidad = mean(.$calidad))
+
+
+cat_rama_2020 = casen2020 %>%  extract_vallab("rama1_rev3")
+
+cat_ramas_2020 = casen_2020 %>% 
+  filter(region %in% c(16), !is.na(rama1_rev3), !(rama1_rev3 %in% c(88,99))) %>% 
+  group_by(rama1_rev3, .drop = TRUE) %>% 
+  mutate(rama1_rev3 = as.character(rama1_rev3)) %>% 
+  summarise(rama = survey_mean(na.rm= TRUE, vartype = "se"), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  rename(id = rama1_rev3) %>% 
+  mutate(id = as.double(id)) %>% 
+  left_join(cat_rama_2020) %>% 
+  mutate(se_max = ifelse(rama<0.5, (rama^(2/3))/9, ((1-rama)^(2/3))/9),
+         calidad = ifelse(n_>=60 & rama_se<=se_max & gl>=9,1,0)) %>% 
+  filter(!is.na(id)) %>% 
+  ungroup %>% 
+  add_row(id = NA, rama = NA, rama_se = NA, n_ = sum(.$n_), gl = NA, rama1_rev3 = NA, se_max = NA, calidad = mean(.$calidad))
+
+
+
+
+##############################################################################################
+# oficios detallado ======================================= 
+##############################################################################################
+
+
+cat_ofi4_2017 = casen2017 %>%  extract_vallab("oficio4")
+
+oficio4_2017 = casen_2017 %>% 
+  filter(region %in% c(5,6,7,8,16), !is.na(oficio4), oficio4!= 999) %>% 
+  group_by(oficio4, .drop = TRUE) %>% 
+  mutate(oficio4 = as.character(oficio4)) %>% 
+  summarise(oficios = survey_mean(na.rm= TRUE, vartype = "se"), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  rename(id = oficio4) %>% 
+  mutate(id = as.double(id)) %>% 
+  left_join(cat_ofi4_2017) %>% 
+  mutate(se_max = ifelse(oficios<0.5, (oficios^(2/3))/9, ((1-oficios)^(2/3))/9),
+         calidad = ifelse(n_>=60 & oficios_se<=se_max & gl>=9,1,0)) %>% 
+  filter(!is.na(id), calidad == 1) %>% 
+  ungroup %>% 
+  add_row(id = NA, oficios = NA, oficios_se = NA, n_ = sum(.$n_), gl = NA, oficio4 = NA, se_max = NA, calidad = mean(.$calidad))
+
+
+cat_ofi4_2020 = casen2020 %>%  extract_vallab("oficio4_88")
+
+oficio4_88_2020 = casen_2020 %>% 
+  filter(region %in% c(5,6,7,8,16), !is.na(oficio4_88), oficio4_88!= 999) %>% 
+  group_by(oficio4_88, .drop = TRUE) %>% 
+  mutate(oficio4_88 = as.character(oficio4_88)) %>% 
+  summarise(oficios = survey_mean(na.rm= TRUE, vartype = "se"), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  rename(id = oficio4_88) %>% 
+  mutate(id = as.double(id)) %>% 
+  left_join(cat_ofi4_2020) %>% 
+  mutate(se_max = ifelse(oficios<0.5, (oficios^(2/3))/9, ((1-oficios)^(2/3))/9),
+         calidad = ifelse(n_>=60 & oficios_se<=se_max & gl>=9,1,0)) %>% 
+  filter(!is.na(id), calidad == 1) %>% 
+  ungroup %>% 
+  add_row(id = NA, oficios = NA, oficios_se = NA, n_ = sum(.$n_), gl = NA, oficio4_88 = NA, se_max = NA, calidad = mean(.$calidad))
+
+
+oficio4 = oficio4_2017 %>% select(oficio4, id, oficios) %>% rename(oficio4_88 = oficio4) %>% 
+  left_join(oficio4_88_2020 %>% select(oficio4_88, id, oficios) %>% rename(oficio2020 = oficios), by = "id")
+  
+
+
+##############################################################################################
+# Actividad económica detallado ======================================= 
+##############################################################################################
+
+
+cat_ram4_2017 = casen2017 %>%  extract_vallab("rama4")
+
+rama4_2017 = casen_2017 %>% 
+  filter(region %in% c(5,6,7,8,16), !is.na(rama4), rama4!= 999) %>% 
+  group_by(rama4, .drop = TRUE) %>% 
+  mutate(rama4 = as.character(rama4)) %>% 
+  summarise(ramas = survey_mean(na.rm= TRUE, vartype = "se"), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  rename(id = rama4) %>% 
+  mutate(id = as.double(id)) %>% 
+  left_join(cat_ram4_2017) %>% 
+  mutate(se_max = ifelse(ramas<0.5, (ramas^(2/3))/9, ((1-ramas)^(2/3))/9),
+         calidad = ifelse(n_>=60 & ramas_se<=se_max & gl>=9,1,0)) %>% 
+  filter(!is.na(id), calidad == 1) %>% 
+  ungroup %>% 
+  add_row(id = NA, ramas = NA, ramas_se = NA, n_ = sum(.$n_), gl = NA, rama4 = NA, se_max = NA, calidad = mean(.$calidad))
+
+
+cat_ram4_2020 = casen2020 %>%  extract_vallab("rama4_rev3")
+
+rama4_rev3_2020 = casen_2020 %>% 
+  filter(region %in% c(5,6,7,8,16), !is.na(rama4_rev3), rama4_rev3!= 999) %>% 
+  group_by(rama4_rev3, .drop = TRUE) %>% 
+  mutate(rama4_rev3 = as.character(rama4_rev3)) %>% 
+  summarise(ramas = survey_mean(na.rm= TRUE, vartype = "se"), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  rename(id = rama4_rev3) %>% 
+  mutate(id = as.double(id)) %>% 
+  left_join(cat_ram4_2020) %>% 
+  mutate(se_max = ifelse(ramas<0.5, (ramas^(2/3))/9, ((1-ramas)^(2/3))/9),
+         calidad = ifelse(n_>=60 & ramas_se<=se_max & gl>=9,1,0)) %>% 
+  filter(!is.na(id), calidad == 1) %>% 
+  ungroup %>% 
+  add_row(id = NA, ramas = NA, ramas_se = NA, n_ = sum(.$n_), gl = NA, rama4_rev3 = NA, se_max = NA, calidad = mean(.$calidad))
+
+
+rama4 = rama4_2017 %>% select(id, ramas, rama4) %>% rename(rama4_rev3 = rama4) %>% 
+  left_join(oficio4_88_2020 %>% select(oficio4_88, id, oficios) %>% rename(oficio2020 = oficios), by = "id")
+
+
+
+
+# **** Envío a Planillas Excel =============================================
+
+wb = createWorkbook()
+
+if (("Índice" %in% sheets(wb)) == TRUE){
+  removeWorksheet(wb, sheet = "Índice")
+  addWorksheet(wb, sheetName = "Índice", gridLines = FALSE)
+} else {
+  addWorksheet(wb, sheetName = "Índice", gridLines = FALSE)
+}
+
+setColWidths(wb, sheet = "Índice", cols = c(2,3), widths = 30)
+
+n_ = dim(indicadores)[1]
+
+if (("raz_inac" %in% sheets(wb)) == TRUE){
+  removeWorksheet(wb, sheet = "raz_inac")
+  addWorksheet(wb, sheetName = "raz_inac", gridLines = FALSE)
+} else {
+  addWorksheet(wb, sheetName = "raz_inac", gridLines = FALSE)
+}
+
+
+# addStyle(wb = wb, sheet = "indicadores", rows = 1, cols = 1, style = mts)
+# setColWidths(wb, sheet = "indicadores", cols = 2:19, widths = 20)  
+
+
+writeData(wb, sheet = "raz_inac",
+          x = as.data.frame(raz_inac_2017),
+          startRow = 2, startCol = 2)
+
+writeData(wb, sheet = "raz_inac",
+          x = as.data.frame(raz_inac_2020),
+          startRow = 22, startCol = 2)
+
+
+
+
+if (("oficios" %in% sheets(wb)) == TRUE){
+  removeWorksheet(wb, sheet = "oficios")
+  addWorksheet(wb, sheetName = "oficios", gridLines = FALSE)
+} else {
+  addWorksheet(wb, sheetName = "oficios", gridLines = FALSE)
+}
+
+
+# addStyle(wb = wb, sheet = "indicadores", rows = 1, cols = 1, style = mts)
+# setColWidths(wb, sheet = "indicadores", cols = 2:19, widths = 20)  
+
+
+writeData(wb, sheet = "oficios",
+          x = as.data.frame(oficios_2017),
+          startRow = 2, startCol = 2)
+
+writeData(wb, sheet = "oficios",
+          x = as.data.frame(oficios_2020),
+          startRow = 16, startCol = 2)
+
+
+
+
+if (("categorias" %in% sheets(wb)) == TRUE){
+  removeWorksheet(wb, sheet = "categorias")
+  addWorksheet(wb, sheetName = "categorias", gridLines = FALSE)
+} else {
+  addWorksheet(wb, sheetName = "categorias", gridLines = FALSE)
+}
+
+
+# addStyle(wb = wb, sheet = "indicadores", rows = 1, cols = 1, style = mts)
+# setColWidths(wb, sheet = "indicadores", cols = 2:19, widths = 20)  
+
+
+writeData(wb, sheet = "categorias",
+          x = as.data.frame(cat_ocup_2017),
+          startRow = 2, startCol = 2)
+
+writeData(wb, sheet = "categorias",
+          x = as.data.frame(cat_ocup_2020),
+          startRow = 14, startCol = 2)
+
+
+
+if (("caes" %in% sheets(wb)) == TRUE){
+  removeWorksheet(wb, sheet = "caes")
+  addWorksheet(wb, sheetName = "caes", gridLines = FALSE)
+} else {
+  addWorksheet(wb, sheetName = "caes", gridLines = FALSE)
+}
+
+# addStyle(wb = wb, sheet = "indicadores", rows = 1, cols = 1, style = mts)
+# setColWidths(wb, sheet = "indicadores", cols = 2:19, widths = 20)  
+
+
+writeData(wb, sheet = "caes",
+          x = as.data.frame(cat_caes_2017),
+          startRow = 2, startCol = 2)
+
+writeData(wb, sheet = "caes",
+          x = as.data.frame(cat_caes_2020),
+          startRow = 14, startCol = 2)
+
+
+
+
+if (("ramas" %in% sheets(wb)) == TRUE){
+  removeWorksheet(wb, sheet = "ramas")
+  addWorksheet(wb, sheetName = "ramas", gridLines = FALSE)
+} else {
+  addWorksheet(wb, sheetName = "ramas", gridLines = FALSE)
+}
+
+# addStyle(wb = wb, sheet = "indicadores", rows = 1, cols = 1, style = mts)
+# setColWidths(wb, sheet = "indicadores", cols = 2:19, widths = 20)  
+
+
+writeData(wb, sheet = "ramas",
+          x = as.data.frame(cat_ramas_2017),
+          startRow = 2, startCol = 2)
+
+writeData(wb, sheet = "ramas",
+          x = as.data.frame(cat_ramas_2020),
+          startRow = 20, startCol = 2)
+
+openXL(wb)
+
+
+
+
+
+if (("ingresos" %in% sheets(wb)) == TRUE){
+  removeWorksheet(wb, sheet = "ingresos")
+  addWorksheet(wb, sheetName = "ingresos", gridLines = FALSE)
+} else {
+  addWorksheet(wb, sheetName = "ingresos", gridLines = FALSE)
+}
+
+# addStyle(wb = wb, sheet = "indicadores", rows = 1, cols = 1, style = mts)
+# setColWidths(wb, sheet = "indicadores", cols = 2:19, widths = 20)  
+
+
+writeData(wb, sheet = "ingresos",
+          x = as.data.frame(ing_trab_2017),
+          startRow = 2, startCol = 2)
+
+writeData(wb, sheet = "ingresos",
+          x = as.data.frame(ing_trab_2020),
+          startRow = 20, startCol = 2)
+
+if (("oficios_88" %in% sheets(wb)) == TRUE){
+  removeWorksheet(wb, sheet = "oficios_88")
+  addWorksheet(wb, sheetName = "oficios_88", gridLines = FALSE)
+} else {
+  addWorksheet(wb, sheetName = "oficios_88", gridLines = FALSE)
+}
+
+# addStyle(wb = wb, sheet = "indicadores", rows = 1, cols = 1, style = mts)
+# setColWidths(wb, sheet = "indicadores", cols = 2:19, widths = 20)  
+
+
+writeData(wb, sheet = "oficios_88",
+          x = as.data.frame(oficio4),
+          startRow = 2, startCol = 2)
+
+
+
+openXL(wb)
+
+
+
+
+
+
+if (("cuadro 2" %in% sheets(wb)) == TRUE){
+  removeWorksheet(wb, sheet = "cuadro 2")
+  addWorksheet(wb, sheetName = "cuadro 2", gridLines = FALSE)
+} else {
+  addWorksheet(wb, sheetName = "cuadro 2", gridLines = FALSE)
+}
+
+writeData(wb, sheet = "cuadro 2",
+          x = as.data.frame(ing_med_),
+          startRow = 2, startCol = 2)
+
+
+
+
+if (("cuadro 3" %in% sheets(wb)) == TRUE){
+  removeWorksheet(wb, sheet = "cuadro 3")
+  addWorksheet(wb, sheetName = "cuadro 3", gridLines = FALSE)
+} else {
+  addWorksheet(wb, sheetName = "cuadro 3", gridLines = FALSE)
+}
+
+writeData(wb, sheet = "cuadro 3",
+          x = as.data.frame(ing_med_dec),
+          startRow = 2, startCol = 2)
+
+
+# writeData(wb, sheet = "indicadores",
+#           x = indicadores,
+#           startRow = 3, startCol = 2, 
+#           colNames = TRUE, rowNames = FALSE,
+#           keepNA = FALSE, 
+#           withFilter = FALSE)
+# writeData(wb, sheet = "indicadores",
+#           x = "Fuente: Observatorio Laboral Nacional",
+#           startRow = n_+4, startCol = 2)
+# writeFormula(wb, sheet ="indicadores", startRow = 1, startCol = 1
+#              , x = makeHyperlinkString(sheet = "Índice",
+#                                        row = 1, col = 1, 
+#                                        text = "Índice"))
+
+
+saveWorkbook(wb, file = paste0(path, "/20210717_coyuntura_ene.xlsx"), overwrite = TRUE)
+
+
+
+
+    
+  mutate(mujer = ifelse(sexo == 2,1,0)) %>% 
+  summarise(
+    ocupados = survey_total(ocupado, vartype = "cv"), 
+    pet = survey_total(edad_activ, vartype = "cv"),
+    n_estratos = unweighted(n_distinct(estrato)),
+    n_conglomerados = unweighted(n_distinct(id_directorio)), 
+    n_ocup = unweighted(sum(ocupado)), 
+    n_pet = unweighted(sum(edad_activ)), 
+    prop_media = survey_mean(media_completa, proportion = TRUE, na.rm = TRUE, vartype = "se"), 
+    prop_inform = survey_mean(ocup_inform, proportion = TRUE, na.rm = TRUE, vartype = "se"), 
+    prop_mujer = survey_mean(mujer, proportion = TRUE, na.rm = TRUE, vartype = "se"), 
+    prop_edad = survey_mean(edad_obj, proportion = TRUE, na.rm = TRUE, vartype = "se"),
+    n_media = unweighted(sum(media_completa)),
+    n_inform = unweighted(sum(ocup_inform)),
+    n_mujer = unweighted(sum(mujer)),
+    n_edad = unweighted(sum(edad_obj))
+  )
+
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+file_ =  "C:/Users/omen03/Google Drive/OLR Ñuble - Observatorio laboral de Ñuble/Análisis Cuantitativo/ENADEL_2019/ENADEL_2019.dta"
+
+
+enadel = read_dta(file_)
