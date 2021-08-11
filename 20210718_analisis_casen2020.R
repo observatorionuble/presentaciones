@@ -14,6 +14,23 @@
 rm(list = ls())
 
 
+# Si al momento de actualizar los archivos arroja un error la primera vez,
+# ejecutar el siguiente código en la powershell de windows de la carpeta del repositorio:
+# git pull nombre_repositorio --allow-unrelated-histories
+
+
+#   
+#   i)	PRESENTACIÓN: 
+#   .	de la Casen (¿qué es?, cómo se realiza, periodicidad,  concepto de pobreza e indigencia, medición por ingreso, medición , evolución de indicadores),  
+# .	del Hogar de Cristo (surgimiento, organización , vigencia del  P. Hurtado en la organización) 
+# 
+# ii)	RESULTADOS E IMPLICANCIAS
+# .	Resultados de la Casen: evolución de los indicadores, hogares monoparentales
+# .	Implicancias para el Hogar de Cristo y la pobreza dura
+# 
+# iii)	PREGUNTAS DEL PUBLICO (en torno a pobreza, solidaridad, riqueza)
+# 
+
 #
 Sys.setenv(LANG = "en")
 
@@ -38,7 +55,7 @@ packages = c("tidyverse", "stringi", "lubridate",
              "ggmap", "rgeos", "ggalt", "maptools", 
              "rgdal", "readxl", "grid", "scales", 
              "fuzzyjoin", "survey", "directlabels", "microbenchmark", 
-             "haven", "sjlabelled", "labelled", "surveytoolbox", "multcomp")
+             "haven", "sjlabelled", "labelled", "surveytoolbox", "multcomp", "XLConnect")
 
 load_pkg(packages)
 
@@ -97,7 +114,7 @@ casen_2017 = casen2017 %>% as_survey_design(ids = varunit, strata = varstrat, we
 casen_2020 = casen2020 %>% as_survey_design(ids = varunit, strata = varstrat, weights = expr)
 
 
-names(casen2017) %in% names(casen_2020)
+# names(casen2020)[names(casen2020) %in% names(casen_2017)]
 
 
 ##############################################################################################
@@ -326,7 +343,11 @@ raz_inac_2017 = casen_2017 %>%
          calidad = ifelse(n_>=60 & razones_se<=se_max & gl>=9,1,0)) %>% 
   filter(!is.na(id)) %>% 
   ungroup %>% 
-  add_row(id = NA, razones = NA, razones_se = NA, n_ = sum(.$n_), o7r1 = NA, gl = NA, se_max = NA, calidad = mean(.$calidad))
+  rename(o7 = o7r1)
+
+# %>% 
+#   add_row(id = NA, razones = NA, razones_se = NA, n_ = sum(.$n_), o7r1 = "Calidad", gl = NA, se_max = NA, calidad = mean(.$calidad)) %>% 
+#   rename(o7 = o7r1)
 
 
 cat_reg_2020 = casen2020 %>%  extract_vallab("o7")
@@ -335,15 +356,129 @@ raz_inac_2020 = casen_2020 %>%
   filter(region %in% c(5,6,7,16,8)) %>% 
   group_by(o7, .drop = TRUE) %>% 
   mutate(o7 = as.character(o7)) %>% 
-  summarise(razones = survey_mean(na.rm= TRUE, vartype = "cv"), 
-            n_ = unweighted(n())) %>% 
+  summarise(razones = survey_mean(na.rm= TRUE, vartype = "se"), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
   rename(id = o7) %>% 
   mutate(id = as.double(id)) %>% 
   left_join(cat_reg_2020) %>% 
-  mutate(calidad = ifelse(n_>=60 & razones_cv<=0.20,1,0)) %>% 
-  filter(!is.na(id)) %>% 
-  ungroup %>% 
-  add_row(id = NA, razones = NA, razones_cv = NA, n_ = sum(.$n_), o7 = NA, calidad = mean(.$calidad))
+  mutate(se_max = ifelse(razones<0.5, (razones^(2/3))/9, ((1-razones)^(2/3))/9),
+         calidad = ifelse(n_>=60 & razones_se<=se_max & gl>=9,1,0)) %>% 
+  filter(!is.na(id)) 
+
+# %>% 
+#   ungroup %>% 
+#   add_row(id = NA, razones = NA, razones_se = NA, n_ = sum(.$n_), o7 = "Calidad", calidad = mean(.$calidad))
+
+qraz_inac_2017 = mean(raz_inac_2017$calidad)
+qraz_inac_2017 = mean(raz_inac_2020$calidad)
+
+raz_inac = raz_inac_2017 %>% mutate(year = 2017) %>% 
+  bind_rows(raz_inac_2020 %>% mutate(year = 2020)) %>% 
+  dplyr::select(id, year, o7, everything()) %>% 
+  reshape2::dcast(o7~year, value.var = )
+
+
+
+##############################################################################################
+# Pobreza por tipo de hogar ======================================= 
+##############################################################################################
+
+
+pobreza_fam_2017  = casen_2017 %>% 
+  filter(region == 16) %>% 
+  mutate(aux = ifelse(pco2==1 & nucleo!=0, 1,0)) %>% 
+  group_by(folio) %>% 
+  mutate(nnucleos = sum(aux)) %>% 
+  mutate(auxi = ifelse(pco1 %in% c(2,3),1,0),
+         conyuge = max(auxi), 
+         pobreza = ifelse(pobreza %in% c(1,2), "pobre", "no pobre")) %>% 
+  mutate(thogar = ifelse(numper==1, "Unipersonal", 
+                         ifelse(numper>1 & conyuge == 0, "monoparental", 
+                                ifelse(numper>1 & conyuge == 1, "biparental", 
+                                       ifelse(numper!=1 & nnucleos == numper, "Sin nucleo", NA))))) %>% 
+  group_by(thogar, pobreza) %>% 
+  filter(pco1 == 1) %>% 
+  summarise(pob = survey_total(na.rm = TRUE, vartype = "cv"), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  mutate(se_max = ifelse(pob<0.5, (pob^(2/3))/9, ((1-pob)^(2/3))/9),
+         calidad = ifelse(n_>=60 & pob_cv<=.15 & gl>=9,1,0)) %>% 
+  filter(pobreza == "pobre")
+
+
+pobreza_fam_2020  = casen_2020 %>% 
+  filter(region == 16) %>% 
+  mutate(aux = ifelse(pco2==1 & nucleo!=0, 1,0)) %>% 
+  group_by(folio) %>% 
+  mutate(nnucleos = sum(aux)) %>% 
+  mutate(auxi = ifelse(pco1 %in% c(2,3),1,0),
+         conyuge = max(auxi), 
+         pobreza = ifelse(pobreza %in% c(1,2), "pobre", "no pobre")) %>% 
+  mutate(thogar = ifelse(numper==1, "Unipersonal", 
+        ifelse(numper>1 & conyuge == 0, "monoparental", 
+        ifelse(numper>1 & conyuge == 1, "biparental", 
+        ifelse(numper!=1 & nnucleos == numper, "Sin nucleo", NA))))) %>% 
+  group_by(thogar, pobreza) %>% 
+  filter(pco1 == 1) %>% 
+  summarise(pob = survey_total(na.rm = TRUE, vartype = "cv"), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  mutate(se_max = ifelse(pob<0.5, (pob^(2/3))/9, ((1-pob)^(2/3))/9),
+         calidad = ifelse(n_>=60 & pob_cv<=.15 & gl>=9,1,0)) %>% 
+  filter(pobreza == "pobre")
+
+
+
+
+##############################################################################################
+# Tipos de hogar ======================================= 
+##############################################################################################
+
+
+tip_fam_2017  = casen_2017 %>% 
+  filter(region == 16) %>% 
+  mutate(aux = ifelse(pco2==1 & nucleo!=0, 1,0)) %>% 
+  group_by(folio) %>% 
+  mutate(nnucleos = sum(aux)) %>% 
+  mutate(auxi = ifelse(pco1 %in% c(2,3),1,0),
+         conyuge = max(auxi), 
+         pobreza = ifelse(pobreza %in% c(1,2), "pobre", "no pobre")) %>% 
+  mutate(thogar = ifelse(numper==1, "Unipersonal", 
+                         ifelse(numper>1 & conyuge == 0, "monoparental", 
+                                ifelse(numper>1 & conyuge == 1, "biparental", 
+                                       ifelse(numper!=1 & nnucleos == numper, "Sin nucleo", NA))))) %>% 
+  group_by(thogar) %>% 
+  filter(pco1 == 1) %>% 
+  summarise(pob = survey_mean(na.rm = TRUE), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  mutate(se_max = ifelse(pob<0.5, (pob^(2/3))/9, ((1-pob)^(2/3))/9),
+         calidad = ifelse(n_>=60 & pob_se<=se_max & gl>=9,1,0)) 
+
+
+
+pobreza_fam_2020  = casen_2020 %>% 
+  filter(region == 16) %>% 
+  mutate(aux = ifelse(pco2==1 & nucleo!=0, 1,0)) %>% 
+  group_by(folio) %>% 
+  mutate(nnucleos = sum(aux)) %>% 
+  mutate(auxi = ifelse(pco1 %in% c(2,3),1,0),
+         conyuge = max(auxi), 
+         pobreza = ifelse(pobreza %in% c(1,2), "pobre", "no pobre")) %>% 
+  mutate(thogar = ifelse(numper==1, "Unipersonal", 
+                         ifelse(numper>1 & conyuge == 0, "monoparental", 
+                                ifelse(numper>1 & conyuge == 1, "biparental", 
+                                       ifelse(numper!=1 & nnucleos == numper, "Sin nucleo", NA))))) %>% 
+  group_by(thogar, pobreza) %>% 
+  filter(pco1 == 1) %>% 
+  summarise(pob = survey_mean(na.rm = TRUE), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  mutate(se_max = ifelse(pob<0.5, (pob^(2/3))/9, ((1-pob)^(2/3))/9),
+         calidad = ifelse(n_>=60 & pob_se<=se_max & gl>=9,1,0)) %>% 
+  filter(pobreza == "pobre")
+
 
 
 
@@ -622,7 +757,8 @@ rama4 = rama4_2017 %>% select(id, ramas, rama4) %>% rename(rama4_rev3 = rama4) %
 
 # **** Envío a Planillas Excel =============================================
 
-wb = createWorkbook()
+# wb = createWorkbook() 
+wb = loadWorkbook(file = "C:/Users/omen03/Documents/presentaciones/20210811_encuesta_casen.xlsx")
 
 if (("Índice" %in% sheets(wb)) == TRUE){
   removeWorksheet(wb, sheet = "Índice")
@@ -633,14 +769,14 @@ if (("Índice" %in% sheets(wb)) == TRUE){
 
 setColWidths(wb, sheet = "Índice", cols = c(2,3), widths = 30)
 
-n_ = dim(indicadores)[1]
+#n_ = dim(indicadores)[1]
 
-if (("raz_inac" %in% sheets(wb)) == TRUE){
-  removeWorksheet(wb, sheet = "raz_inac")
-  addWorksheet(wb, sheetName = "raz_inac", gridLines = FALSE)
-} else {
-  addWorksheet(wb, sheetName = "raz_inac", gridLines = FALSE)
-}
+# if (("raz_inac" %in% sheets(wb)) == TRUE){
+#   removeWorksheet(wb, sheet = "raz_inac")
+#   addWorksheet(wb, sheetName = "raz_inac", gridLines = FALSE)
+# } else {
+#   addWorksheet(wb, sheetName = "raz_inac", gridLines = FALSE)
+# }
 
 
 # addStyle(wb = wb, sheet = "indicadores", rows = 1, cols = 1, style = mts)
@@ -648,12 +784,9 @@ if (("raz_inac" %in% sheets(wb)) == TRUE){
 
 
 writeData(wb, sheet = "raz_inac",
-          x = as.data.frame(raz_inac_2017),
+          x = as.data.frame(raz_inac),
           startRow = 2, startCol = 2)
 
-writeData(wb, sheet = "raz_inac",
-          x = as.data.frame(raz_inac_2020),
-          startRow = 22, startCol = 2)
 
 
 
@@ -745,6 +878,9 @@ writeData(wb, sheet = "ramas",
           startRow = 20, startCol = 2)
 
 openXL(wb)
+
+
+saveWorkbook(wb, file = paste0("C:/Users/omen03/Documents/presentaciones/20210811_encuesta_casen.xlsx"), overwrite = TRUE)
 
 
 
