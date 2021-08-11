@@ -238,13 +238,13 @@ ing_med_ = casen2017 %>% select(varstrat, varunit, expr, region, ytrabajocor) %>
 
 
 ##############################################################################################
-# Ingreso del trabajo según decil de ingreso autónomo ======================================= 
+# Ingreso del trabajo según decil de ingreso autónomo del hogar ======================================= 
 ##############################################################################################
 
 cat_daut_2017 = casen2017 %>%  extract_vallab("dautr")
 
 ing_trab_2017 = casen_2017 %>% 
-  filter(region %in% c(16)) %>% 
+  filter((region %in% c(16)) &  pco1 == 1) %>% 
   group_by(dautr, .drop = TRUE) %>% 
   mutate(dautr = as.character(dautr)) %>% 
   summarise(ing_trabajo = survey_mean(ypchtrabajo, na.rm= TRUE, vartype = "cv"), 
@@ -252,7 +252,7 @@ ing_trab_2017 = casen_2017 %>%
             gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
   rename(id = dautr) %>% 
   mutate(id = as.double(id)) %>% 
-  left_join(cat_reg_2017) %>% 
+  left_join(cat_daut_2017) %>% 
   mutate(calidad = ifelse(n_>=60 & ing_trabajo_cv<=.2 & gl>=9,1,0)) %>% 
   filter(!is.na(id)) %>% 
   ungroup %>% 
@@ -263,10 +263,10 @@ ing_trab_2017 = casen_2017 %>%
 cat_daut_2020 = casen2020 %>%  extract_vallab("dautr")
 
 ing_trab_2020 = casen_2020 %>% 
-  filter(region %in% c(16)) %>% 
+  filter(region %in% c(16) & pco1 == 1) %>% 
   group_by(dautr, .drop = TRUE) %>% 
   mutate(dautr = as.character(dautr)) %>% 
-  summarise(ing_trabajo = survey_mean(ypchtrabcor, na.rm= TRUE, vartype = "cv"), 
+  summarise(ing_trabajo = survey_mean(ypchtrabcor, na.rm= TRUE, vartype = "cv")*1.086, 
             n_ = unweighted(n()), 
             gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
   rename(id = dautr) %>% 
@@ -276,6 +276,49 @@ ing_trab_2020 = casen_2020 %>%
   filter(!is.na(id)) %>% 
   ungroup %>% 
   add_row(id = NA, ing_trabajo = NA, ing_trabajo_cv = NA, n_ = sum(.$n_), gl = NA, dautr = NA, calidad = mean(.$calidad))
+
+
+##############################################################################################
+# Subsidios ingreso autónomo del hogar ======================================= 
+##############################################################################################
+
+cat_daut_2017 = casen2017 %>%  extract_vallab("dautr")
+
+subsi_2017 = casen_2017 %>% 
+  filter((region %in% c(16)) &  pco1 == 1) %>% 
+  group_by(dautr, .drop = TRUE) %>% 
+  mutate(dautr = as.character(dautr), 
+         ypc_ysubh = round(ysubh/numper)) %>% 
+  summarise(subsidio = survey_mean(ypc_ysubh, na.rm= TRUE, vartype = "cv"), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  rename(id = dautr) %>% 
+  mutate(id = as.double(id)) %>% 
+  left_join(cat_daut_2017) %>% 
+  mutate(calidad = ifelse(n_>=60 & subsidio_cv<=.2 & gl>=9,1,0)) %>% 
+  filter(!is.na(id)) %>% 
+  ungroup %>% 
+  add_row(id = NA, subsidio = NA, subsidio_cv = NA, n_ = sum(.$n_), gl = NA, dautr = NA, calidad = mean(.$calidad))
+
+
+
+cat_daut_2020 = casen2020 %>%  extract_vallab("dautr")
+
+ing_trab_2020 = casen_2020 %>% 
+  filter(region %in% c(16) & pco1 == 1) %>% 
+  group_by(dautr, .drop = TRUE) %>% 
+  mutate(dautr = as.character(dautr)) %>% 
+  summarise(ing_trabajo = survey_mean(ypchtrabcor, na.rm= TRUE, vartype = "cv")*1.086, 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  rename(id = dautr) %>% 
+  mutate(id = as.double(id)) %>% 
+  left_join(cat_daut_2020) %>% 
+  mutate(calidad = ifelse(n_>=60 & ing_trabajo_cv<=.2 & gl>=9,1,0)) %>% 
+  filter(!is.na(id)) %>% 
+  ungroup %>% 
+  add_row(id = NA, ing_trabajo = NA, ing_trabajo_cv = NA, n_ = sum(.$n_), gl = NA, dautr = NA, calidad = mean(.$calidad))
+
 
 ##############################################################################################
 # Razones de inactividad ======================================= 
@@ -429,6 +472,28 @@ pobreza_fam_2020  = casen_2020 %>%
   filter(pobreza == "pobre")
 
 
+pobreza_fam_2020_2  = casen_2020 %>% 
+  filter(region == 16) %>% 
+  mutate(aux = ifelse(pco2==1 & nucleo!=0, 1,0)) %>% 
+  group_by(folio) %>% 
+  mutate(nnucleos = sum(aux)) %>% 
+  mutate(auxi = ifelse(pco1 %in% c(2,3),1,0),
+         conyuge = max(auxi), 
+         pobreza_sinte = ifelse(pobreza_sinte %in% c(1,2), "pobre", "no pobre")) %>% 
+  mutate(thogar = ifelse(numper==1, "Unipersonal", 
+                         ifelse(numper>1 & conyuge == 0, "monoparental", 
+                                ifelse(numper>1 & conyuge == 1, "biparental", 
+                                       ifelse(numper!=1 & nnucleos == numper, "Sin nucleo", NA))))) %>% 
+  group_by(thogar, pobreza_sinte) %>% 
+  filter(pco1 == 1) %>% 
+  summarise(pob = survey_total(na.rm = TRUE, vartype = "cv"), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  mutate(se_max = ifelse(pob<0.5, (pob^(2/3))/9, ((1-pob)^(2/3))/9),
+         calidad = ifelse(n_>=60 & pob_cv<=.15 & gl>=9,1,0)) %>% 
+  filter(pobreza_sinte == "pobre")
+
+
 
 
 ##############################################################################################
@@ -436,7 +501,7 @@ pobreza_fam_2020  = casen_2020 %>%
 ##############################################################################################
 
 
-tip_fam_2017  = casen_2017 %>% 
+tipo_fam_2017  = casen_2017 %>% 
   filter(region == 16) %>% 
   mutate(aux = ifelse(pco2==1 & nucleo!=0, 1,0)) %>% 
   group_by(folio) %>% 
@@ -450,15 +515,14 @@ tip_fam_2017  = casen_2017 %>%
                                        ifelse(numper!=1 & nnucleos == numper, "Sin nucleo", NA))))) %>% 
   group_by(thogar) %>% 
   filter(pco1 == 1) %>% 
-  summarise(pob = survey_mean(na.rm = TRUE), 
+  summarise(pob = survey_total(na.rm = TRUE, vartype = "cv"), 
             n_ = unweighted(n()), 
             gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
   mutate(se_max = ifelse(pob<0.5, (pob^(2/3))/9, ((1-pob)^(2/3))/9),
-         calidad = ifelse(n_>=60 & pob_se<=se_max & gl>=9,1,0)) 
+         calidad = ifelse(n_>=60 & pob_cv<=.15 & gl>=9,1,0)) 
 
 
-
-pobreza_fam_2020  = casen_2020 %>% 
+tipo_fam_2020  = casen_2020 %>% 
   filter(region == 16) %>% 
   mutate(aux = ifelse(pco2==1 & nucleo!=0, 1,0)) %>% 
   group_by(folio) %>% 
@@ -470,15 +534,63 @@ pobreza_fam_2020  = casen_2020 %>%
                          ifelse(numper>1 & conyuge == 0, "monoparental", 
                                 ifelse(numper>1 & conyuge == 1, "biparental", 
                                        ifelse(numper!=1 & nnucleos == numper, "Sin nucleo", NA))))) %>% 
-  group_by(thogar, pobreza) %>% 
+  group_by(thogar) %>% 
   filter(pco1 == 1) %>% 
-  summarise(pob = survey_mean(na.rm = TRUE), 
+  summarise(pob = survey_total(na.rm = TRUE, vartype = "cv"), 
             n_ = unweighted(n()), 
             gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
   mutate(se_max = ifelse(pob<0.5, (pob^(2/3))/9, ((1-pob)^(2/3))/9),
-         calidad = ifelse(n_>=60 & pob_se<=se_max & gl>=9,1,0)) %>% 
-  filter(pobreza == "pobre")
+         calidad = ifelse(n_>=60 & pob_cv<=.15 & gl>=9,1,0)) 
 
+
+
+
+
+##############################################################################################
+# Tipos de hogar por sexo======================================= 
+##############################################################################################
+
+
+muj_fam_2017  = casen_2017 %>% 
+  filter(region == 16) %>% 
+  mutate(aux = ifelse(pco2==1 & nucleo!=0, 1,0)) %>% 
+  group_by(folio) %>% 
+  mutate(nnucleos = sum(aux)) %>% 
+  mutate(auxi = ifelse(pco1 %in% c(2,3),1,0),
+         conyuge = max(auxi), 
+         pobreza = ifelse(pobreza %in% c(1,2), "pobre", "no pobre")) %>% 
+  mutate(thogar = ifelse(numper==1, "Unipersonal", 
+                         ifelse(numper>1 & conyuge == 0, "monoparental", 
+                                ifelse(numper>1 & conyuge == 1, "biparental", 
+                                       ifelse(numper!=1 & nnucleos == numper, "Sin nucleo", NA))))) %>% 
+  group_by(thogar) %>% 
+  filter(pco1 == 1 & sexo == 2) %>% 
+  summarise(pob = survey_total(na.rm = TRUE, vartype = "cv"), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  mutate(se_max = ifelse(pob<0.5, (pob^(2/3))/9, ((1-pob)^(2/3))/9),
+         calidad = ifelse(n_>=60 & pob_cv<=.15 & gl>=9,1,0)) 
+
+
+muj_fam_2020  = casen_2020 %>% 
+  filter(region == 16) %>% 
+  mutate(aux = ifelse(pco2==1 & nucleo!=0, 1,0)) %>% 
+  group_by(folio) %>% 
+  mutate(nnucleos = sum(aux)) %>% 
+  mutate(auxi = ifelse(pco1 %in% c(2,3),1,0),
+         conyuge = max(auxi), 
+         pobreza = ifelse(pobreza %in% c(1,2), "pobre", "no pobre")) %>% 
+  mutate(thogar = ifelse(numper==1, "Unipersonal", 
+                         ifelse(numper>1 & conyuge == 0, "monoparental", 
+                                ifelse(numper>1 & conyuge == 1, "biparental", 
+                                       ifelse(numper!=1 & nnucleos == numper, "Sin nucleo", NA))))) %>% 
+  group_by(thogar) %>% 
+  filter(pco1 == 1 & sexo == 2) %>% 
+  summarise(pob = survey_total(na.rm = TRUE, vartype = "cv"), 
+            n_ = unweighted(n()), 
+            gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
+  mutate(se_max = ifelse(pob<0.5, (pob^(2/3))/9, ((1-pob)^(2/3))/9),
+         calidad = ifelse(n_>=60 & pob_cv<=.15 & gl>=9,1,0)) 
 
 
 
