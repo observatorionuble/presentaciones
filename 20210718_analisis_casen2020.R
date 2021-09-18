@@ -154,6 +154,10 @@ ing_med_2020 = ing_med_2020 %>%
 # post_hoc = summary(glht(modelo, linfct = mcp(region="Tukey")))
 
 
+# datas_ = Filter( function(x) 'data.frame' %in% class( get(x) ), ls() )
+# 
+# lapply(datas_, function(x) class(get(x)))
+
 ##############################################################################################
 # Ingreso mediano según región 
 ##############################################################################################
@@ -186,9 +190,6 @@ ing_med_dec = casen2017 %>% select(varstrat, varunit, expr, region, dautr, ytrab
 ing_med_dec %>% 
   group_by(year) %>% 
   mutate(ind_10_10 = )
-
-
-
 
 
 ##############################################################################################
@@ -304,20 +305,21 @@ subsi_2017 = casen_2017 %>%
 
 cat_daut_2020 = casen2020 %>%  extract_vallab("dautr")
 
-ing_trab_2020 = casen_2020 %>% 
-  filter(region %in% c(16) & pco1 == 1) %>% 
+subsi_2020 = casen_2020 %>% 
+  filter((region %in% c(16)) &  pco1 == 1) %>% 
   group_by(dautr, .drop = TRUE) %>% 
-  mutate(dautr = as.character(dautr)) %>% 
-  summarise(ing_trabajo = survey_mean(ypchtrabcor, na.rm= TRUE, vartype = "cv")*1.086, 
+  mutate(dautr = as.character(dautr), 
+         ypc_ysubh = round(ysubh/numper)) %>% 
+  summarise(subsidio = survey_mean(ypc_ysubh, na.rm= TRUE, vartype = "cv"), 
             n_ = unweighted(n()), 
             gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
   rename(id = dautr) %>% 
   mutate(id = as.double(id)) %>% 
   left_join(cat_daut_2020) %>% 
-  mutate(calidad = ifelse(n_>=60 & ing_trabajo_cv<=.2 & gl>=9,1,0)) %>% 
+  mutate(calidad = ifelse(n_>=60 & subsidio_cv<=.2 & gl>=9,1,0)) %>% 
   filter(!is.na(id)) %>% 
   ungroup %>% 
-  add_row(id = NA, ing_trabajo = NA, ing_trabajo_cv = NA, n_ = sum(.$n_), gl = NA, dautr = NA, calidad = mean(.$calidad))
+  add_row(id = NA, subsidio = NA, subsidio_cv = NA, n_ = sum(.$n_), gl = NA, dautr = NA, calidad = mean(.$calidad))
 
 
 ##############################################################################################
@@ -618,23 +620,23 @@ oficios_2017 = casen_2017 %>%
   add_row(id = NA, oficios = NA, oficios_se = NA, n_ = sum(.$n_), gl = NA, oficio1 = NA, se_max = NA, calidad = mean(.$calidad))
 
 
-cat_ofi_2020 = casen2020 %>%  extract_vallab("oficio1_08")
+cat_ofi_2020 = casen2020 %>%  extract_vallab("oficio1_88")
 
 oficios_2020 = casen_2020 %>% 
-  filter(region %in% c(16), !is.na(oficio1_08), !(oficio1_08 %in% c(98,99))) %>% 
-  group_by(oficio1_08, .drop = TRUE) %>% 
-  mutate(oficio1_08 = as.character(oficio1_08)) %>% 
+  filter(region %in% c(16), !is.na(oficio1_88), !(oficio1_88 %in% c(98,99))) %>% 
+  group_by(oficio1_88, .drop = TRUE) %>% 
+  mutate(oficio1_88 = as.character(oficio1_08)) %>% 
   summarise(oficios = survey_mean(na.rm= TRUE, vartype = "se"), 
             n_ = unweighted(n()), 
             gl = n_distinct(varunit)-n_distinct(varstrat)) %>% 
-  rename(id = oficio1_08) %>% 
+  rename(id = oficio1_88) %>% 
   mutate(id = as.double(id)) %>% 
   left_join(cat_ofi_2020) %>% 
   mutate(se_max = ifelse(oficios<0.5, (oficios^(2/3))/9, ((1-oficios)^(2/3))/9),
          calidad = ifelse(n_>=60 & oficios_se<=se_max & gl>=9,1,0)) %>% 
   filter(!is.na(id)) %>% 
   ungroup %>% 
-  add_row(id = NA, oficios = NA, oficios_se = NA, n_ = sum(.$n_), gl = NA, oficio1_08 = NA, se_max = NA, calidad = mean(.$calidad))
+  add_row(id = NA, oficios = NA, oficios_se = NA, n_ = sum(.$n_), gl = NA, oficio1_88 = NA, se_max = NA, calidad = mean(.$calidad))
 
 
 
@@ -813,8 +815,8 @@ oficio4_88_2020 = casen_2020 %>%
   add_row(id = NA, oficios = NA, oficios_se = NA, n_ = sum(.$n_), gl = NA, oficio4_88 = NA, se_max = NA, calidad = mean(.$calidad))
 
 
-oficio4 = oficio4_2017 %>% select(oficio4, id, oficios) %>% rename(oficio4_88 = oficio4) %>% 
-  left_join(oficio4_88_2020 %>% select(oficio4_88, id, oficios) %>% rename(oficio2020 = oficios), by = "id")
+oficio4 = oficio4_2017 %>% dplyr::select(oficio4, id, oficios) %>% rename(oficio4_88 = oficio4) %>% 
+  left_join(oficio4_88_2020 %>% dplyr::select(oficio4_88, id, oficios) %>% rename(oficio2020 = oficios), by = "id")
   
 
 
@@ -861,8 +863,8 @@ rama4_rev3_2020 = casen_2020 %>%
   add_row(id = NA, ramas = NA, ramas_se = NA, n_ = sum(.$n_), gl = NA, rama4_rev3 = NA, se_max = NA, calidad = mean(.$calidad))
 
 
-rama4 = rama4_2017 %>% select(id, ramas, rama4) %>% rename(rama4_rev3 = rama4) %>% 
-  left_join(oficio4_88_2020 %>% select(oficio4_88, id, oficios) %>% rename(oficio2020 = oficios), by = "id")
+rama4 = rama4_2017 %>% dplyr::select(id, ramas, rama4) %>% rename(rama4_rev3 = rama4) %>% 
+  left_join(oficio4_88_2020 %>% dplyr::select(oficio4_88, id, oficios) %>% rename(oficio2020 = oficios), by = "id")
 
 
 
@@ -988,6 +990,123 @@ writeData(wb, sheet = "ramas",
 writeData(wb, sheet = "ramas",
           x = as.data.frame(cat_ramas_2020),
           startRow = 20, startCol = 2)
+
+
+
+
+if (("ramas" %in% sheets(wb)) == TRUE){
+  removeWorksheet(wb, sheet = "ramas")
+  addWorksheet(wb, sheetName = "ramas", gridLines = FALSE)
+} else {
+  addWorksheet(wb, sheetName = "ramas", gridLines = FALSE)
+}
+
+# addStyle(wb = wb, sheet = "indicadores", rows = 1, cols = 1, style = mts)
+# setColWidths(wb, sheet = "indicadores", cols = 2:19, widths = 20)  
+
+
+writeData(wb, sheet = "ramas",
+          x = as.data.frame(cat_ramas_2017),
+          startRow = 2, startCol = 2)
+
+writeData(wb, sheet = "ramas",
+          x = as.data.frame(cat_ramas_2020),
+          startRow = 20, startCol = 2)
+
+
+
+
+if (("subsi" %in% sheets(wb)) == TRUE){
+  removeWorksheet(wb, sheet = "subsi")
+  addWorksheet(wb, sheetName = "subsi", gridLines = FALSE)
+} else {
+  addWorksheet(wb, sheetName = "subsi", gridLines = FALSE)
+}
+
+# addStyle(wb = wb, sheet = "indicadores", rows = 1, cols = 1, style = mts)
+# setColWidths(wb, sheet = "indicadores", cols = 2:19, widths = 20)  
+
+
+writeData(wb, sheet = "subsi",
+          x = as.data.frame(subsi_2017),
+          startRow = 2, startCol = 2)
+
+writeData(wb, sheet = "subsi",
+          x = as.data.frame(subsi_2020),
+          startRow = 13, startCol = 2)
+
+
+
+if (("pobreza_fam" %in% sheets(wb)) == TRUE){
+  removeWorksheet(wb, sheet = "pobreza_fam")
+  addWorksheet(wb, sheetName = "pobreza_fam", gridLines = FALSE)
+} else {
+  addWorksheet(wb, sheetName = "pobreza_fam", gridLines = FALSE)
+}
+
+# addStyle(wb = wb, sheet = "indicadores", rows = 1, cols = 1, style = mts)
+# setColWidths(wb, sheet = "indicadores", cols = 2:19, widths = 20)  
+
+
+writeData(wb, sheet = "pobreza_fam",
+          x = as.data.frame(pobreza_fam_2017),
+          startRow = 2, startCol = 2)
+
+writeData(wb, sheet = "pobreza_fam",
+          x = as.data.frame(pobreza_fam_2020),
+          startRow = 7, startCol = 2)
+
+
+writeData(wb, sheet = "pobreza_fam",
+          x = as.data.frame(pobreza_fam_2020_2),
+          startRow = 11, startCol = 2)
+
+
+
+if (("tipo_fam" %in% sheets(wb)) == TRUE){
+  removeWorksheet(wb, sheet = "tipo_fam")
+  addWorksheet(wb, sheetName = "tipo_fam", gridLines = FALSE)
+} else {
+  addWorksheet(wb, sheetName = "tipo_fam", gridLines = FALSE)
+}
+
+# addStyle(wb = wb, sheet = "indicadores", rows = 1, cols = 1, style = mts)
+# setColWidths(wb, sheet = "indicadores", cols = 2:19, widths = 20)  
+
+
+writeData(wb, sheet = "tipo_fam",
+          x = as.data.frame(tipo_fam_2017),
+          startRow = 2, startCol = 2)
+
+writeData(wb, sheet = "tipo_fam",
+          x = as.data.frame(tipo_fam_2020),
+          startRow = 9, startCol = 2)
+
+
+
+
+if (("muj_fam" %in% sheets(wb)) == TRUE){
+  removeWorksheet(wb, sheet = "muj_fam")
+  addWorksheet(wb, sheetName = "muj_fam", gridLines = FALSE)
+} else {
+  addWorksheet(wb, sheetName = "muj_fam", gridLines = FALSE)
+}
+
+# addStyle(wb = wb, sheet = "indicadores", rows = 1, cols = 1, style = mts)
+# setColWidths(wb, sheet = "indicadores", cols = 2:19, widths = 20)  
+
+
+writeData(wb, sheet = "muj_fam",
+          x = as.data.frame(muj_fam_2017),
+          startRow = 2, startCol = 2)
+
+writeData(wb, sheet = "muj_fam",
+          x = as.data.frame(muj_fam_2020),
+          startRow = 8, startCol = 2)
+
+
+
+
 
 openXL(wb)
 
