@@ -55,7 +55,7 @@ packages = c("tidyverse", "stringi", "lubridate",
              "ggmap", "rgeos", "ggalt", "maptools", 
              "rgdal", "readxl", "grid", "scales", 
              "fuzzyjoin", "survey", "directlabels", "microbenchmark", 
-             "haven", "sjlabelled", "labelled", "surveytoolbox", "multcomp", "XLConnect")
+             "haven", "sjlabelled", "labelled", "surveytoolbox", "multcomp", "XLConnect", "chilemapas")
 
 load_pkg(packages)
 
@@ -64,10 +64,13 @@ file_path = "G:/Mi unidad/OLR Ñuble - Observatorio laboral de Ñuble/Bases de dat
 
 path_mat = "G:/Mi unidad/OLR Ñuble - Observatorio laboral de Ñuble/Bases de datos/Estadísticas de Educación/OFICIAL_WEB_PROCESO_MAT_2007_al_2021_29_06_2021/OFICIAL_WEB_PROCESO_MAT_2007_al_2021_29_06_2021.csv"
 
+path_tit = "G:/Mi unidad/OLR Ñuble - Observatorio laboral de Ñuble/Bases de datos/Estadísticas de Educación/TITULADOS-WEB-2007-2020_03-06-2021-1/TITULADOS WEB 2007-2020_03-06-2021.csv"
 
 casen2020 <- haven::read_sav(file_path) 
 
 matricula <- data.table::fread(path_mat)
+
+titulados <- data.table::fread(path_tit)
 
 
 ##############################################################################################
@@ -155,7 +158,7 @@ casen_2020 = casen_2020 %>%
                       ifelse(macrozona %in% c("Zona Sur", "Zona Austral"), "Sur", macrozona)))
 
 ing_med_2020 = casen_2020 %>% 
-  filter(oficio4_08 %in% c(2330,2340, 2341, 2353,2354,2355)) %>% 
+  filter(oficio4_08 %in% c(2330,2341, 2342, 2353,2354,2355)) %>% 
   group_by(region) %>% 
   summarise(ingreso_promedio = survey_mean(ytrabajocor, na.rm= TRUE, vartype = "cv"),
             edad = survey_mean(edad, na.rm = TRUE, vartype = "cv"), 
@@ -181,7 +184,7 @@ writeData(wb, sheet = "Ingreso promedio",
 
 dist_2020 = casen_2020 %>% 
   mutate(oficio4_08 = ifelse(oficio4_08 %in% c(2353,2354,2355), 2350, oficio4_08)) %>% 
-  filter(oficio4_08 %in% c(2330,2341, 2350)) %>% 
+  filter(oficio4_08 %in% c(2330,2341, 2342, 2350)) %>% 
   group_by(macrozona2, oficio4_08) %>% 
   summarise(prop = survey_mean(na.rm= TRUE, vartype = "se"),
             frec = unweighted(n())) %>%
@@ -208,7 +211,7 @@ writeData(wb, sheet = "Tipo de profesor",
 
 dist_sex_2020 = casen_2020 %>% 
   mutate(oficio4_08 = ifelse(oficio4_08 %in% c(2353,2354,2355), 2350, oficio4_08)) %>% 
-  filter(oficio4_08 %in% c(2330,2341, 2350)) %>% 
+  filter(oficio4_08 %in% c(2330,2341, 2342, 2350)) %>% 
   group_by(macrozona2, sexo) %>% 
   summarise(prop = survey_mean(na.rm= TRUE, vartype = "se"), 
             frec = unweighted(n())) %>% 
@@ -234,7 +237,7 @@ cat_inf = casen2020 %>% extract_vallab("ocup_inf")
 
 dist_inf_2020 = casen_2020 %>% 
   mutate(oficio4_08 = ifelse(oficio4_08 %in% c(2353,2354,2355), 2350, oficio4_08)) %>% 
-  filter(oficio4_08 %in% c(2330,2341, 2350), 
+  filter(oficio4_08 %in% c(2330,2341, 2342, 2350), 
          ocup_inf!=9) %>% 
   group_by(macrozona2, ocup_inf) %>% 
   summarise(prop = survey_mean(na.rm= TRUE, vartype = "se"), 
@@ -261,10 +264,11 @@ cat_inf = casen2020 %>% extract_vallab("ocup_inf")
 
 dist_migr_2020 = casen_2020 %>% 
   mutate(oficio4_08 = ifelse(oficio4_08 %in% c(2353,2354,2355), 2350, oficio4_08)) %>% 
-  filter(oficio4_08 %in% c(2330,2341, 2350), 
-         ocup_inf!=9) %>% 
-  mutate(migrante = ifelse(r2 %in% c(1,2), "No migrante", 
-                    ifelse(r2 %in% c(3,4), "Migrante", NA))) %>% 
+  filter(oficio4_08 %in% c(2330,2341, 2342, 2350)) %>% 
+  mutate(aux = stri_length(r2_c_cod), 
+         region_o = ifelse(aux==4, stri_sub(r2_c_cod,1,1), stri_sub(r2_c_cod,1,2)) %>% as.numeric) %>% 
+#  filter(region_o!=88) %>% 
+  mutate(migrante = ifelse(region==region_o | r2==2,"No Migrante","migrante")) %>% 
   group_by(macrozona2, migrante, .drop = TRUE) %>% 
   summarise(prop = survey_mean(na.rm= TRUE, vartype = "se"), 
             frec = unweighted(n())) %>% 
@@ -289,7 +293,8 @@ writeData(wb, sheet = "Distribución migrante",
 
 
 dist_edad_2020 = casen_2020 %>% 
-  filter(oficio4_08 %in% c(2320,2330,2340, 2341, 2353,2354,2355)) %>% 
+  mutate(oficio4_08 = ifelse(oficio4_08 %in% c(2353,2354,2355), 2350, oficio4_08)) %>% 
+  filter(oficio4_08 %in% c(2330,2341, 2342, 2350)) %>% 
   mutate(tramo = ifelse(edad %in% 15:29, "15 a 29 años",
                  ifelse(edad %in% 30:44, "30 a 44 años", 
                  ifelse(edad %in% 45:59, "45 a 59 años", 
